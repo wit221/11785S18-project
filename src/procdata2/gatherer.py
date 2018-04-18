@@ -1,15 +1,6 @@
 """
-Given NHANES master data website, for each year:
-    -create year folder
-    -create data cat folders for each cat
-        -download all files in cat
-        -for each file
-            -produce meta data
-            -convert to csv/numpy
-        -possibly: merge all files for a cat in one master file
-    -possibly: merge all files for a year in one master file
--possibly: merge all files for all years in one master file
-
+Scrapes the NHANES website to create an aggregate meta-data table of
+all data and meta-data files across all years. Results in GDrive.
 """
 import sys
 import os
