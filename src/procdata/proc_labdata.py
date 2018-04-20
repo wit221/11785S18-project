@@ -100,11 +100,15 @@ def proc_labdata(labdata,cheminfo,cycle):
                             v1 is 0 if value is below LOD or missing and measurement otherwise
                             v2 is 0 if value is missing, LOD is value is non-detect, measurement otherwise
     :return chemlist: a numpy array with chemicals and their indices
+    :return seqn_dense: a numpy array with survey ID numbers for dense data
+    :return seqn_sparse: a numpy array with survey ID numbers for sparse data
     '''
 
     dense_labdata = []
     sparse_labdata = []
     chemlist=[]
+    seqn_dense = []
+    seqn_sparse = []
     pers_num_chem = []
 
     # Generate list of chemicals
@@ -122,6 +126,7 @@ def proc_labdata(labdata,cheminfo,cycle):
     # Generate dense matrix
     for i in labdata:
 
+        seqn_dense.append(i)
         dat = np.zeros((num_chem,2),dtype=float)
         qty = 0
 
@@ -175,6 +180,7 @@ def proc_labdata(labdata,cheminfo,cycle):
             s = s + 1
             continue
 
+        seqn_sparse.append(i)
         dat = np.zeros((pers_num_chem[s], 3), dtype=float)
         s = s + 1
 
@@ -226,7 +232,7 @@ def proc_labdata(labdata,cheminfo,cycle):
 
         sparse_labdata.append(dat)
 
-    return np.array(dense_labdata), np.array(sparse_labdata), np.array(chemlist)
+    return np.array(dense_labdata), np.array(sparse_labdata), np.array(chemlist), np.array(seqn_dense), np.array(seqn_sparse)
 
 def main(argv):
     if len(argv) != 3:
@@ -258,11 +264,13 @@ def main(argv):
             print(ch,cheminfo[ch][cycle]['file'])
             print(cheminfo[ch][cycle]['file_desc'])
 
-        dense_labdata, sparse_labdata, chemlist = proc_labdata(labdata,cheminfo,cycle)
+        dense_labdata, sparse_labdata, chemlist, seqn_dense, seqn_sparse = proc_labdata(labdata,cheminfo,cycle)
 
-        np.save(data_dir+'dense_labdata_'+cycle+'.npy',dense_labdata)
-        np.save(data_dir+'sparse_labdata_'+cycle+'.npy',sparse_labdata)
-        np.save(data_dir+'chemlist_labdata_'+cycle+'.npy',chemlist)
+        np.save(data_dir+'npy/dense_labdata_'+cycle+'.npy',dense_labdata)
+        np.save(data_dir+'npy/sparse_labdata_'+cycle+'.npy',sparse_labdata)
+        np.save(data_dir+'npy/chemlist_labdata_'+cycle+'.npy',chemlist)
+        np.save(data_dir+'npy/seqn_dense_labdata_'+cycle+'.npy',seqn_dense)
+        np.save(data_dir+'npy/seqn_sparse_labdata_'+cycle+'.npy',seqn_sparse)
 
         print('Number of lab results = ', len(chemlist))
         print('Number of persons (dense):',len(dense_labdata))
