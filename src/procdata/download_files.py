@@ -141,11 +141,52 @@ def get_llod(doc_list):
     llod = 'LLOD'
 
     for doc in doc_list:
-        df = pd.read_html(doc)[0]
-        for i in range(df.shape[0]):
-            if llod in df.columns:
-                name = df.iloc[i,0]
-                llod_dict[name] = float(df.iloc[i,2])
+
+        struct = pd.read_html(doc)
+
+        lodcol = None
+        lodrow = -1
+
+        for s in range(len(struct)):
+
+            df = struct[s]
+
+            #print(doc)
+            #print(df)
+
+            for col in range(df.shape[1]):
+
+                if type(df.columns[col]) is str and llod == df.columns[col].strip():
+                    lodcol = col
+
+                for row in range(df.shape[0]):
+                    if type(df.iloc[row,col]) is str and llod == df.iloc[row,col].strip():
+                        lodcol = col
+                        lodrow = row
+
+            if lodcol is not None:
+
+                for row in range(df.shape[0]):
+
+                    if row == lodrow:
+                        continue
+
+                    else:
+                        for name_col in range(len(df.iloc[row,:])):
+
+                            name = df.iloc[row, name_col]
+
+                            if type(name) is str and (name.strip()[0:3] == "LBX" or name.strip()[0:3] == "URX"):
+
+                                lodval_raw = df.iloc[row,lodcol]
+
+                                if type(lodval_raw) is str:
+                                    lodval = float(lodval_raw.strip().split(" ")[0])
+                                else:
+                                    lodval = float(lodval_raw)
+
+                                llod_dict[name.strip()] = lodval
+                                print(doc,s,name,lodval)
 
     return llod_dict
 
