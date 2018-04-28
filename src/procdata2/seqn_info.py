@@ -5,7 +5,7 @@ import xport
 import csv
 from functools import reduce
 
-data_dir = os.path.abspath('../data/2013/Dietary')
+data_dir = os.path.abspath('../../data/2013/Dietary')
 main_files = ['DR1IFF_H', 'DR2IFF_H', 'DR1TOT_H', 'DR2TOT_H', 'DS1IDS_H', 'DS2IDS_H', 'DS1TOT_H', 'DS2TOT_H', 'DSQIDS_H', 'DSQTOT_H']
 
 if __name__ == '__main__':
@@ -31,4 +31,3 @@ if __name__ == '__main__':
         print("{}: missing {} seqn\t(start seqn: {}, end seqn: {})".format(
             main_files[i], diff.size, np.min(seqn_all[i]), np.max(seqn_all[i])
         ))
-    np.save('diet_seqn_union.npy', union)
