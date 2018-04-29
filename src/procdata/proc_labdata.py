@@ -86,7 +86,7 @@ def get_cheminfo(metadata,llod,cycle):
 
     return cheminfo
 
-def proc_labdata(labdata,cheminfo,cycle):
+def proc_labdata(labdata,cheminfo,cycle,demodata):
     '''
     Creates npy arrays for use in modeling
     :param labdata:
@@ -107,8 +107,7 @@ def proc_labdata(labdata,cheminfo,cycle):
     dense_labdata = []
     sparse_labdata = []
     chemlist=[]
-    seqn_dense = []
-    seqn_sparse = []
+    seqn_list = []
     pers_num_chem = []
 
     # Generate list of chemicals
@@ -124,11 +123,16 @@ def proc_labdata(labdata,cheminfo,cycle):
     num_chem = len(chemlist)
 
     # Generate dense matrix
-    for i in labdata:
+    for i in demodata:
 
-        seqn_dense.append(i)
+        seqn_list.append(i)
         dat = np.zeros((num_chem,2),dtype=float)
         qty = 0
+
+        if i not in labdata.keys():
+            dense_labdata.append(dat)
+            pers_num_chem.append(qty)
+            continue
 
         for j in range(num_chem):
 
@@ -174,15 +178,14 @@ def proc_labdata(labdata,cheminfo,cycle):
 
     # Generate sparse matrix
     s = 0
-    for i in labdata:
+    for i in demodata:
+
+        dat = np.zeros((pers_num_chem[s], 3), dtype=float)
 
         if pers_num_chem[s] == 0:
+            sparse_labdata.append(dat)
             s = s + 1
             continue
-
-        seqn_sparse.append(i)
-        dat = np.zeros((pers_num_chem[s], 3), dtype=float)
-        s = s + 1
 
         qty = 0
         for j in range(num_chem):
@@ -231,8 +234,79 @@ def proc_labdata(labdata,cheminfo,cycle):
                     continue
 
         sparse_labdata.append(dat)
+        s = s + 1
 
-    return np.array(dense_labdata), np.array(sparse_labdata), np.array(chemlist), np.array(seqn_dense), np.array(seqn_sparse)
+    return np.array(dense_labdata), np.array(sparse_labdata), np.array(chemlist), np.array(seqn_list)
+
+def quantize_labdata(dense_labdata, chemlist):
+    '''
+    Takes dense 3-d numpy array (seqn,2 llod coding variants, 188 chemicals) and converts it into a
+    2-d numpy array (seqn, 188 chemicals) containing the following categorical variables:
+        9 - value is missing entirely
+        0 - value is below llod
+        1 - value in the 1st quartile of values above llod
+        2 - value in the 2nd quartile of values above llod
+        3 - value in the 3rd quartile of values above llod
+        4 - value in the 4th quartile of values above llod
+    :param dense_labdata: dense numpy array
+    :param chemlist: numpy array with chemical names and indices
+    :return: quantized labdata, metainformation
+    '''
+    qdat = np.full((len(dense_labdata),len(chemlist)),9,dtype=int)
+    info = []
+
+
+    for i in range(len(chemlist)):
+
+        nonmiss_value_set = []
+        for j in range(len(dense_labdata)):
+            if dense_labdata[j][i][0]>0 and dense_labdata[j][i][1]>0:
+                nonmiss_value_set.append(dense_labdata[j][i][0])
+
+        #print(nonmiss_value_set)
+
+        if len(nonmiss_value_set)>0 :
+            nonmiss_value_set = np.array(nonmiss_value_set)
+            q25 = np.percentile(nonmiss_value_set, [25])
+            q50 = np.percentile(nonmiss_value_set, [50])
+            q75 = np.percentile(nonmiss_value_set, [75])
+            info.append({'name':chemlist[i,0], \
+                         'index' : i, \
+                         'num_nonmiss': len(nonmiss_value_set), \
+                         'cat0':'value below LLOD', \
+                         'cat1': 'value above LLOD and <='+str(q25), \
+                         'cat2': 'value >'+str(q25)+' and  <=' + str(q50), \
+                         'cat3': 'value >' + str(q50) + ' and  <=' + str(q75), \
+                         'cat4': 'value >' + str(q75) , \
+                         'cat9': 'value missing' })
+
+            for j in range(len(dense_labdata)):
+                if dense_labdata[j][i][0]==0 and dense_labdata[j][i][1]>0:
+                    qdat[j,i] = 0
+                if dense_labdata[j][i][0]>0 and dense_labdata[j][i][1]>0 and \
+                        dense_labdata[j][i][1] <= q25:
+                    qdat[j,i] = 1
+                if dense_labdata[j][i][0]>0 and dense_labdata[j][i][1]>0 and \
+                        dense_labdata[j][i][1] > q25 and dense_labdata[j][i][1] <= q50:
+                    qdat[j,i] = 2
+                if dense_labdata[j][i][0]>0 and dense_labdata[j][i][1]>0 and \
+                        dense_labdata[j][i][1] > q50 and dense_labdata[j][i][1] <= q75:
+                    qdat[j,i] = 3
+                if dense_labdata[j][i][0]>0 and dense_labdata[j][i][1]>0 and \
+                        dense_labdata[j][i][1] > q75:
+                    qdat[j,i] = 4
+        else:
+            for j in range(len(dense_labdata)):
+                if dense_labdata[j][i][0]==0 and dense_labdata[j][i][1]>0:
+                    qdat[j,i] = 0
+            info.append({'name':chemlist[i,0], \
+                         'index' : i, \
+                         'num_nonmiss': 0 ,\
+                         'cat0':'value below LLOD', \
+                         'cat9': 'value missing' })
+
+
+    return np.array(qdat), np.array(info)
 
 def main(argv):
     if len(argv) != 3:
@@ -246,6 +320,7 @@ def main(argv):
     try:
 
         metadata = get_meta(data_dir)
+        demodata = readJson(data_dir+'json/Demographics_'+cycle+'.json')
         labdata = readJson(data_dir+'json/Laboratory_'+cycle+'.json')
         llod =    readJson(data_dir+'json/llod_Laboratory_'+cycle+'.json')
 
@@ -264,13 +339,15 @@ def main(argv):
             print(ch,cheminfo[ch][cycle]['file'])
             print(cheminfo[ch][cycle]['file_desc'])
 
-        dense_labdata, sparse_labdata, chemlist, seqn_dense, seqn_sparse = proc_labdata(labdata,cheminfo,cycle)
+        dense_labdata, sparse_labdata, chemlist, seqn_list = proc_labdata(labdata,cheminfo,cycle,demodata)
+        quantized_dense_labdata, quantized_dense_labdata_info  = quantize_labdata(dense_labdata, chemlist)
 
         np.save(data_dir+'npy/dense_labdata_'+cycle+'.npy',dense_labdata)
         np.save(data_dir+'npy/sparse_labdata_'+cycle+'.npy',sparse_labdata)
-        np.save(data_dir+'npy/chemlist_labdata_'+cycle+'.npy',chemlist)
-        np.save(data_dir+'npy/seqn_dense_labdata_'+cycle+'.npy',seqn_dense)
-        np.save(data_dir+'npy/seqn_sparse_labdata_'+cycle+'.npy',seqn_sparse)
+        np.save(data_dir+'npy/chem_names_'+cycle+'.npy',chemlist)
+        np.save(data_dir+'npy/seqn_labdata_'+cycle+'.npy',seqn_list)
+        np.save(data_dir+'npy/quantized_dense_labdata_'+cycle+'.npy',quantized_dense_labdata)
+        np.save(data_dir+'npy/quantized_dense_labdata_info_'+cycle+'.npy',quantized_dense_labdata_info)
 
         print('Number of lab results = ', len(chemlist))
         print('Number of persons (dense):',len(dense_labdata))
