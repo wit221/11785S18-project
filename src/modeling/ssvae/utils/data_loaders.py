@@ -157,23 +157,12 @@ class NHANES(data.Dataset):
     valid_data, valid_labels = None, None
     test_data, test_labels = None, None
 
-    raw_data = 'data/npy/quantized_dense_labdata_2013-2014.npy'
-    processed_folder = 'data/processed'
-    training_file = 'training.pt'
-    test_file = 'test.pt'
+    raw_data = os.path.join(os.environ['NHANES_PROJECT_ROOT'], 'data/all/data.npy')
 
     def __init__(self, root, mode, sup_num, ychem_idx=66, use_cuda=True, *args, **kwargs):
 
         self.root = os.path.expanduser(root)
         self.ychem_idx = ychem_idx # default will take blood lead as target
-
-        try:
-            os.makedirs(os.path.join(self.root, NHANES.processed_folder))
-        except OSError as e:
-            if e.errno == errno.EEXIST:
-                pass
-            else:
-                raise
 
         try:
             self.rawnpy = np.load(os.path.join(self.root, NHANES.raw_data))

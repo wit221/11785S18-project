@@ -8,8 +8,8 @@ import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
-from custom_mlp import MLP, Exp
-from data_loaders import NHANES, mkdir_p, setup_data_loaders
+from utils.custom_mlp import MLP, Exp
+from utils.data_loaders import NHANES, mkdir_p, setup_data_loaders
 
 
 class SSVAE(nn.Module):
@@ -25,7 +25,7 @@ class SSVAE(nn.Module):
     :param use_cuda: use GPUs for faster training
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
-    def __init__(self, output_size=5, input_size=187, z_dim=50, hidden_layers=(500,),
+    def __init__(self, output_size=5, input_size=16519, z_dim=50, hidden_layers=(500,),
                  config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()

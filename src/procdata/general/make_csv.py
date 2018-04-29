@@ -13,10 +13,7 @@ data_path = os.path.join(master_dir,'data/2013/Dietary')
 if __name__ == '__main__':
     for (_, _, filenames) in os.walk(data_path):
         for fn in filenames:
-            print(fn)
             fnn = os.path.join(data_path, fn)
-            print(fnn)
             cmd = 'python -m xport ' + fnn
-            print(cmd.split())
             with open(fnn[:-4]+'.csv', 'w') as out_file:
                 subprocess.Popen(cmd.split(),stdout=out_file)
