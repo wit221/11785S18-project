@@ -2,6 +2,7 @@ from __future__ import print_function
 import torch.utils.data as data
 import errno
 import os
+import pickle
 from functools import reduce
 
 import numpy as np
@@ -13,7 +14,13 @@ from torch.utils.data import DataLoader
 # It contains utilities for caching, transforming and splitting NHANES data
 # efficiently. By default, a Pytorch DataLoader will apply the transform every epoch
 # we avoid this by caching the data early on in the NHANES class
-
+def labels2ind(data_labels, target_labels):
+    ind = []
+    for i, label in enumerate(data_labels):
+        if label['name'] in target_labels:
+            ind.append(i)
+            target_labels.remove(label['name'])
+    return np.array(ind)
 
 # transformations for data
 def fn_x_nhanes(x, use_cuda):
@@ -93,12 +100,16 @@ def split_sup_unsup_valid_test(dat, yidx, sup_num, test_num=1000):
     X = np.delete(dat,yidx,axis=1)
     y = np.take(dat,yidx,axis=1)
 
-    #print(y)
+    print(dat.shape)
+    print(X.shape)
+    print(y.shape)
 
     # unsup data
+    # unsup_idx = (np.max(y, -1)==9)
     unsup_idx = (y==9)
     y_unsup = y[unsup_idx]
     X_unsup = X[unsup_idx]
+
 
     assert sup_num % 5 == 0, "unable to have equal number of examples per class"
 
@@ -122,6 +133,18 @@ def split_sup_unsup_valid_test(dat, yidx, sup_num, test_num=1000):
     # train set
     X_sup = X[sup_idx]
     y_sup = y[sup_idx]
+
+    print('y_unsup: ', y_unsup.shape)
+    print('x_unsup: ', X_unsup.shape)
+
+    print('X_valid: ', X_valid.shape)
+    print('y_valid: ', y_valid.shape)
+
+    print('X_test: ', X_test.shape)
+    print('y_test: ', y_test.shape)
+
+    print('X_sup: ', X_sup.shape)
+    print('y_sup: ', y_sup.shape)
 
     return X_sup, y_sup, X_unsup, y_unsup, X_valid, y_valid,  X_test, y_test
 
@@ -157,15 +180,19 @@ class NHANES(data.Dataset):
     valid_data, valid_labels = None, None
     test_data, test_labels = None, None
 
-    raw_data = os.path.join(os.environ['NHANES_PROJECT_ROOT'], 'data/all/data.npy')
+    data_path = os.path.join(os.environ['NHANES_PROJECT_ROOT'], 'data/all')
+    raw_data = os.path.join(data_path, 'data.npy')
+    labels = os.path.join(data_path, 'labels.npy')
+    info = pickle.load(open(os.path.join(data_path, 'info.pkl'), 'rb'))
 
-    def __init__(self, root, mode, sup_num, ychem_idx=66, use_cuda=True, *args, **kwargs):
-
+    def __init__(self, root, mode, sup_num,
+    target_labels=['LBXTHG'],
+    use_cuda=True, *args, **kwargs):
         self.root = os.path.expanduser(root)
-        self.ychem_idx = ychem_idx # default will take blood lead as target
 
         try:
-            self.rawnpy = np.load(os.path.join(self.root, NHANES.raw_data))
+            self.rawnpy = np.load(NHANES.raw_data)
+            self.labels = np.load(NHANES.labels)
         except OSError as e:
             raise
 
@@ -175,6 +202,9 @@ class NHANES(data.Dataset):
         assert mode in ["sup", "unsup", "test", "valid"], "invalid train/test option values"
 
         # Split data
+        # self.ychem_idx = labels2ind(self.labels, target_labels)
+        self.ychem_idx = 234
+        # print(self.ychem_idx, target_labels)
 
         NHANES.train_data_sup, NHANES.train_labels_sup, \
             NHANES.train_data_unsup, NHANES.train_labels_unsup, \

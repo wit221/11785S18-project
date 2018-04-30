@@ -2,6 +2,7 @@ import argparse
 
 import torch
 import torch.nn as nn
+from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
@@ -10,6 +11,7 @@ from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
 from utils.custom_mlp import MLP, Exp
 from utils.data_loaders import NHANES, mkdir_p, setup_data_loaders
+from utils.vae_plots import nhanes_test_tsne_ssvae
 
 
 class SSVAE(nn.Module):
@@ -256,6 +258,9 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     accuracy = (accurate_preds * 1.0) / (len(predictions) * batch_size)
     return accuracy
 
+def visualize(ss_vae, viz, test_loader):
+    if viz:
+        nhanes_test_tsne_ssvae(ssvae=ss_vae, test_loader=test_loader)
 
 def main(args):
     """
@@ -265,6 +270,11 @@ def main(args):
     """
     if args.seed is not None:
         set_seed(args.seed, args.cuda)
+
+    viz = None
+    if args.visualize:
+        viz = Visdom()
+        mkdir_p("./vae_results")
 
     # batch_size: number of images (and labels) to be considered in a batch
     ss_vae = SSVAE(z_dim=args.z_dim,
@@ -311,7 +321,6 @@ def main(args):
 
         # run inference for a certain number of epochs
         for i in range(0, args.num_epochs):
-
             # get the losses for an epoch
             epoch_losses_sup, epoch_losses_unsup = \
                 run_inference_for_epoch(data_loaders, losses, periodic_interval_batches)
@@ -345,6 +354,7 @@ def main(args):
         final_test_accuracy = get_accuracy(data_loaders["test"], ss_vae.classifier, args.batch_size)
         print_and_log(logger, "best validation accuracy {} corresponding testing accuracy {} "
                       "last testing accuracy {}".format(best_valid_acc, corresponding_test_acc, final_test_accuracy))
+        visualize(ss_vae, viz, data_loaders["test"])
 
     finally:
         # close the logger file object if we opened it earlier
@@ -361,7 +371,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--cuda', action='store_true',
                         help="use GPU(s) to speed up training")
-    parser.add_argument('-n', '--num-epochs', default=50, type=int,
+    parser.add_argument('-n', '--num-epochs', default=5, type=int,
                         help="number of epochs to run")
     parser.add_argument('--aux-loss', action="store_true",
                         help="whether to use the auxiliary loss from NIPS 14 paper "
@@ -388,6 +398,8 @@ if __name__ == "__main__":
                         help="filename for logging the outputs")
     parser.add_argument('--seed', default=None, type=int,
                         help="seed for controlling randomness in this example")
+    parser.add_argument('--visualize', action="store_true",
+                    help="use a visdom server to visualize the embeddings")
     args = parser.parse_args()
 
     # some assertions to make sure that batching math assumptions are met

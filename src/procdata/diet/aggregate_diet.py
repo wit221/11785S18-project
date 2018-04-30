@@ -15,12 +15,15 @@ import pandas as pd
 import xport
 
 #parameters and util vars
-data_dir = os.path.abspath('../../data/2013/Dietary')
+master_path = os.environ['NHANES_PROJECT_ROOT']
+data_dir = os.path.join(master_path, 'data/diet/2013/Dietary')
+out_path = os.path.join(master_path, 'data/diet')
+
 ind_files = ['DR1IFF_H', 'DR2IFF_H', 'DS1IDS_H', 'DS2IDS_H', 'DSQIDS_H']
 tot_files =  ['DR1TOT_H', 'DR2TOT_H', 'DS1TOT_H', 'DS2TOT_H', 'DSQTOT_H']
 all_files = ind_files + tot_files
 
-fill_val = float('nan')
+fill_val = 9
 seqn_start = 73557
 seqn_end = 83732 #exclusive
 
@@ -273,13 +276,15 @@ def aggregate():
     x = np.hstack([file.as_matrix() for file in files])
     labels = np.array(list(itertools.chain.from_iterable(files)))
     miss_mask = np.isnan(x)
-    x[miss_mask] = 0
     seqn = np.arange(seqn_start, seqn_end)
-    return x, labels, miss_mask, seqn
+    return x.astype(np.int64), labels, miss_mask, seqn
 
 if __name__ == '__main__':
     x, labels, miss_mask, seqn = aggregate()
-    out_path = os.path.abspath('../../data')
+
+    x[x!=0] = 1
+    x[miss_mask] = fill_val
+
     np.save(os.path.join(out_path, 'dietary_data.npy'), x)
     np.save(os.path.join(out_path, 'dietary_labels.npy'), labels)
     np.save(os.path.join(out_path, 'dietary_miss_mask.npy'), miss_mask)

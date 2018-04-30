@@ -7,6 +7,8 @@ master_path = os.environ['NHANES_PROJECT_ROOT']
 data_path = os.path.join(master_path, 'data')
 out_path = os.path.join(data_path, 'all')
 
+fill_val = 9
+
 # lab
 lab_path = os.path.join(data_path, 'lab')
 lab_data = np.load(os.path.join(lab_path, 'quantized_dense_labdata_2013-2014.npy'))
@@ -23,12 +25,8 @@ diet_data = np.load(os.path.join(diet_path, 'dietary_data.npy'))
 diet_labels = np.load(os.path.join(diet_path, 'dietary_labels.npy'))
 diet_mask = np.load(os.path.join(diet_path, 'dietary_miss_mask.npy'))
 
-
-# set diet missing values to 9
-diet_data[diet_mask] = 9
-
 #aggregate data
-data = np.hstack((demo_data, lab_data, diet_data)).astype(np.float)
+data = np.hstack((demo_data, lab_data, diet_data)).astype(np.int)
 
 #process and aggergate labels
 demo_labels_json = np.array([{'name':label} for label in demo_labels], dtype=object)
@@ -48,15 +46,15 @@ info = {'offsets':
                 },
             'lab':
                 {'min': np.min(lab_data),
-                'max': np.max(lab_data[lab_data != 9])
+                'max': np.max(lab_data[lab_data != fill_val])
                 },
             'diet':
-                {'min': np.min(diet_data),
+                {'min': np.min(diet_data[diet_data != fill_val]),
                 'max': np.max(diet_data)
                 }
             }
        }
-       
+
 #save all
 if not os.path.exists(out_path):
     os.makedirs(out_path)
