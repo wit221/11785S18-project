@@ -16,22 +16,17 @@ import xport
 
 #parameters and util vars
 master_path = os.environ['NHANES_PROJECT_ROOT']
-data_dir = os.path.join(master_path, 'data/diet/2013/Dietary')
+data_dir = os.path.join(master_path, 'data/diet/{}/Dietary')
 out_path = os.path.join(master_path, 'data/diet')
 
-ind_files = ['DR1IFF_H', 'DR2IFF_H', 'DS1IDS_H', 'DS2IDS_H', 'DSQIDS_H']
-tot_files =  ['DR1TOT_H', 'DR2TOT_H', 'DS1TOT_H', 'DS2TOT_H', 'DSQTOT_H']
-all_files = ind_files + tot_files
+year2letter = {2007: 'E', 2009: 'F', 2011: 'G', 2013: 'H'}
+
+seqn_starts = {2007: 41475, 2009: 51624, 2011: 62161, 2013: 73557}
+seqn_ends = {2007: 51624, 2009: 62161, 2011: 71917, 2013: 83732} #exclusive
 
 fill_val = 9
-seqn_start = 73557
-seqn_end = 83732 #exclusive
 
 #helpers
-#from seqn number domain to index domain
-def seqn2ind(seqn):
-    assert(seqn>=seqn_start and seqn <=seqn_end)
-    return seqn-seqn_start
 #drop all columns from given column incl.
 def dropColToEnd(df, col_label):
     col_labels = list(df)
@@ -44,12 +39,10 @@ def dropBetween(df, col_label_start, col_label_end):
     return df.drop(col_labels_to_drop, axis=1)
 def dropAllBut(df, keep_cols):
     return df.drop(df.columns.difference(keep_cols), 1)
-def fillMissingSeqnAndDropSeqn(df):
-    df =  df.set_index("SEQN").reindex(pd.Index(np.arange(seqn_start,seqn_end), name="SEQN")).reset_index()
-    df = df.drop('SEQN',1)
+def fillMissingSeqn(df, year):
+    df =  df.set_index("SEQN").reindex(pd.Index(np.arange(seqn_starts[year],seqn_ends[year]), name="SEQN"))
     return df
-
-def process_DRIFF_H(day_num):
+def process_DRIFF(day_num, year):
     # """
     # DR*IFF_H is an ind_files
     # note: drops DR1CCMNM DR1CCMTX DR1_020 DR1_030Z DR1FS DR1_040Z
@@ -58,7 +51,8 @@ def process_DRIFF_H(day_num):
     # food1, food2, food3
     # """
     #setup some var names based on day
-    DRIFF_H = 'DR{}IFF_H'.format(day_num)
+    DRIFF = 'DR{}IFF_{}'.format(day_num, year2letter[year])
+
     DRIFDCD = 'DR{}IFDCD'.format(day_num)
     DRIKCAL = 'DR{}IKCAL'.format(day_num)
     DR_020 = 'DR{}_020'.format(day_num)
@@ -67,8 +61,8 @@ def process_DRIFF_H(day_num):
     WTDRD = 'WTDRD1'
     DRIGRMS = 'DR{}IGRMS'.format(day_num)
 
-    fn = DRIFF_H
-    file_path = os.path.join(data_dir, "{}.XPT".format(fn))
+    fn = DRIFF
+    file_path = os.path.join(data_dir.format(year), "{}.XPT".format(fn))
     with open(file_path, 'rb') as f:
         dfm = xport.to_dataframe(f)
 
@@ -103,38 +97,42 @@ def process_DRIFF_H(day_num):
             core.loc[core.index[core['SEQN']==seqn], fc_label_format.format(fc)] = 1
 
     #final readifiction
-    core = fillMissingSeqnAndDropSeqn(core)
+    core_seqn = list(core.set_index("SEQN").index)
+    core = fillMissingSeqn(core, year)
 
-    return core
+    return core, core_seqn
 
-def process_DRTOT_H(day_num):
+def process_DRTOT(day_num, year):
     #setup some var names based on day
-    DRTOT_H = 'DR{}TOT_H'.format(day_num)
+    DRTOT = 'DR{}TOT_{}'.format(day_num, year2letter[year])
     WTDRD = 'WTDRD1'
     DRTKCAL = 'DR{}TKCAL'.format(day_num)
 
-    fn = DRTOT_H
-    file_path = os.path.join(data_dir, "{}.XPT".format(fn))
+    fn = DRTOT
+    file_path = os.path.join(data_dir.format(year), "{}.XPT".format(fn))
     with open(file_path, 'rb') as f:
         dfm = xport.to_dataframe(f)
     df = dfm
     df = dropBetween(df, WTDRD, DRTKCAL)
-    df = fillMissingSeqnAndDropSeqn(df)
+
+    df_seqn = list(df.set_index("SEQN").index)
+
+    df = fillMissingSeqn(df, year), df_seqn
 
     return df
 
-def process_DSIDS_H(day_num):
+def process_DSIDS(day_num, year):
     """
     DR*IDS_H is an ind_files
     note: drops DR1CCMNM DR1CCMTX DR1_020 DR1_030Z DR1FS DR1_040Z
     """
     #setup some var names based on day
-    DSIDS_H = 'DS{}IDS_H'.format(day_num)
+    DSIDS = 'DS{}IDS_{}'.format(day_num, year2letter[year])
     DSDSUPP = 'DSDSUPP'
     WTDRD = 'WTDRD1'
 
-    fn = DSIDS_H
-    file_path = os.path.join(data_dir, "{}.XPT".format(fn))
+    fn = DSIDS
+    file_path = os.path.join(data_dir.format(year), "{}.XPT".format(fn))
     with open(file_path, 'rb') as f:
         dfm = xport.to_dataframe(f)
 
@@ -168,33 +166,36 @@ def process_DSIDS_H(day_num):
             #set appropriate value in core.o..
             sc = dfs.at[i, 'DSDSUPID']
             core.loc[core.index[core['SEQN']==seqn], sc_label_format.format(day_num, sc)] = 1
-    core = fillMissingSeqnAndDropSeqn(core)
+    core_seqn = list(core.set_index("SEQN").index)
+    core = fillMissingSeqn(core, year)
 
-    return core
+    return core, core_seqn
 
-def process_DSTOT_H(day_num):
-    DSTOT_H = 'DS{}TOT_H'.format(day_num)
+def process_DSTOT(day_num, year):
+    DSTOT = 'DS{}TOT_{}'.format(day_num, year2letter[year])
     WTDRD = 'WTDRD1'
     DSTKCAL = 'DS{}TKCAL'.format(day_num)
 
-    fn = DSTOT_H
-    file_path = os.path.join(data_dir, "{}.XPT".format(fn))
+    fn = DSTOT
+    file_path = os.path.join(data_dir.format(year), "{}.XPT".format(fn))
     with open(file_path, 'rb') as f:
         dfm = xport.to_dataframe(f)
     df = dfm
     df = dropBetween(df, WTDRD, DSTKCAL)
-    df = fillMissingSeqnAndDropSeqn(df)
 
-    return df
+    df_seqn = list(df.set_index("SEQN").index)
+    df = fillMissingSeqn(df, year)
 
-def process_DSQIDS_H():
+    return df, df_seqn
+
+def process_DSQIDS(year):
     #setup some var names based on day
-    DSQIDS_H = 'DSQIDS_H'
+    DSQIDS = 'DSQIDS_{}'.format(year2letter[year])
     DSDSUPP = 'DSDSUPP'
     WTDRD = 'WTDRD1'
 
-    fn = DSQIDS_H
-    file_path = os.path.join(data_dir, "{}.XPT".format(fn))
+    fn = DSQIDS
+    file_path = os.path.join(data_dir.format(year), "{}.XPT".format(fn))
     with open(file_path, 'rb') as f:
         dfm = xport.to_dataframe(f)
 
@@ -229,16 +230,17 @@ def process_DSQIDS_H():
             sc = dfs.at[i, 'DSDSUPID']
             core.loc[core.index[core['SEQN']==seqn], sc_label_format.format(sc)] = 1
 
-    core = fillMissingSeqnAndDropSeqn(core)
+    core_seqn = list(core.set_index("SEQN").index)
+    core = fillMissingSeqn(core, year)
 
-    return core
+    return core, core_seqn
 
-def process_DSQTOT_H():
+def process_DSQTOT(year):
     #setup some var names based on day
-    DSQTOT_H = 'DSQTOT_H'
+    DSQTOT = 'DSQTOT_{}'.format(year2letter[year])
 
-    fn = DSQTOT_H
-    file_path = os.path.join(data_dir, "{}.XPT".format(fn))
+    fn = DSQTOT
+    file_path = os.path.join(data_dir.format(year), "{}.XPT".format(fn))
     with open(file_path, 'rb') as f:
         dfm = xport.to_dataframe(f)
     df = dfm
@@ -247,45 +249,124 @@ def process_DSQTOT_H():
     df['SEQN'] = df['SEQN'].astype(int)
 
     df = dropBetween(df, 'DSDCOUNT', 'DSQTKCAL')
-    df = fillMissingSeqnAndDropSeqn(df)
 
-    return df
-def aggregate():
-    DR1IFF_H = process_DRIFF_H(1)
-    DR2IFF_H = process_DRIFF_H(2)
-    DR1TOT = process_DRTOT_H(1)
-    DR2TOT = process_DRTOT_H(2)
+    df_seqn = list(df.set_index("SEQN").index)
+    df = fillMissingSeqn(df, year)
 
-    print('DR: done')
+    return df, df_seqn
 
-    DS1IDS_H = process_DSIDS_H(1)
-    DS2IDS_H = process_DSIDS_H(2)
-    DS1TOT_H = process_DSTOT_H(1)
-    DS2TOT_H = process_DSTOT_H(2)
+def aggregate(years):
 
-    print('DS: done')
+    dfs_all = []
+    seqns = []
 
-    DSQIDS_H = process_DSQIDS_H()
-    DSQTOT_H = process_DSQTOT_H()
+    for year in years:
+        print('Starting year {}.'.format(year))
 
-    print('DSQ: done')
+        DR1IFF, dr1iff_seqn = process_DRIFF(1, year)
+        DR2IFF, dr2iff_seqn = process_DRIFF(2, year)
+        DR1TOT, dr1tot_seqn= process_DRTOT(1, year)
+        DR2TOT, dr2tot_seqn = process_DRTOT(2, year)
+        print('DR: done')
 
-    files = [DR1IFF_H, DR2IFF_H, DR1TOT, DR2TOT, DS1IDS_H, DS2IDS_H, DS1TOT_H,
-    DS2TOT_H, DSQIDS_H, DSQTOT_H]
+        DS1IDS, ds1ids_seqn = process_DSIDS(1, year)
+        DS2IDS, ds2ids_seqn = process_DSIDS(2, year)
+        DS1TOT, ds1tot_seqn = process_DSTOT(1, year)
+        DS2TOT, ds2tot_seqn = process_DSTOT(2, year)
+        print('DS: done')
 
-    x = np.hstack([file.as_matrix() for file in files])
-    labels = np.array(list(itertools.chain.from_iterable(files)))
-    miss_mask = np.isnan(x)
-    seqn = np.arange(seqn_start, seqn_end)
-    return x.astype(np.int64), labels, miss_mask, seqn
+        DSQIDS, dsqids_seqn = process_DSQIDS(year)
+        DSQTOT, dsqtot_seqn = process_DSQTOT(year)
+
+        #fill dr1iff values
+        #those that are in interview but are not in dr1iff ->set to 0
+        indices = list(set(dr1tot_seqn).difference(set(dr1iff_seqn)))
+        DR1IFF.loc[indices] = 0
+
+        #fill dr2iff values
+        #those that are in interview but are not in dr2iff ->set to 0
+        indices = set(dr2tot_seqn).difference(set(dr2iff_seqn))
+        DR2IFF.loc[indices] = 0
+
+        #fill dr1tot values
+        #those that are not in dr1iff but are in interview -> set to 0
+        indices = set(dr1tot_seqn).difference(set(dr1iff_seqn))
+        DR1TOT.loc[indices] = 0
+
+        #fill dr2tot values
+        #those that are not in dr2iff but are in interview -> set to 0
+        indices = set(dr2tot_seqn).difference(set(dr2iff_seqn))
+        DR2TOT.loc[indices] = 0
+
+        #fill ds1ids values
+        #those that are in interview but are not in ds1ids -> set to 0
+        indices = set(ds1tot_seqn).difference(set(ds1ids_seqn))
+        DS1IDS.loc[indices] = 0
+
+        #fill ds2ids values
+        #those that are in interview but are not in ds2ids -> set to 0
+        indices = set(ds2tot_seqn).difference(set(ds2ids_seqn))
+        DS2IDS.loc[indices] = 0
+
+        #fill ds1tot values
+        #those that are not in ds1ids but are in interview -> set to 0
+        indices = set(ds1tot_seqn).difference(set(ds1ids_seqn))
+        DS1IDS.loc[indices] = 0
+
+        #fill ds2tot values
+        #those that are not in ds2ids but are in interview -> set to 0
+        indices = set(ds2tot_seqn).difference(set(ds2ids_seqn))
+        DS2IDS.loc[indices] = 0
+
+        #fill dsqids
+        #those that are in questionnaire but are not in dsqids -> set to 0
+        indices = set(dsqtot_seqn).difference(set(dsqids_seqn))
+        DSQIDS.loc[indices] = 0
+
+        #fill dsqtot
+        #those that are in questionnaire but are not in ds1ids -> set to 0
+        indices = set(dsqtot_seqn).difference(set(dsqids_seqn))
+        DSQTOT.loc[indices] = 0
+
+        print('DSQ: done')
+
+        dfs_year = [DR1IFF, DR2IFF, DR1TOT, DR2TOT, DS1IDS, DS2IDS, DS1TOT, DS2TOT, DSQIDS, DSQTOT]
+        df_year = pd.concat(dfs_year, axis=1)
+        dfs_all.append(df_year)
+        seqns.append(np.arange(seqn_starts[year], seqn_ends[year]))
+
+    #discretize
+    for i in range(len(dfs_all)):
+        dfs_all[i].clip(0,1, inplace=True)
+    #fill nans
+    for i in range(len(dfs_all)):
+        dfs_all[i].fillna(fill_val, inplace=True)
+    #convert to uint to avoid memory errors
+    for i in range(len(dfs_all)):
+        dfs_all[i] = dfs_all[i].astype('uint8')
+    #create final dataframe and remove seqn from data frame
+    dfs_all = pd.concat(dfs_all, axis=0)
+    dfs_all = dfs_all.reset_index()
+    dfs_all = dfs_all.drop('SEQN',1)
+
+    #convert to numpy
+    labels = list(dfs_all)
+
+    dfs_all = dfs_all.as_matrix()
+    #get all labels
+    #aggregate sequence numbers
+    seqns = np.concatenate(seqns)
+
+    return dfs_all.astypr('uint8'), labels, seqns
 
 if __name__ == '__main__':
-    x, labels, miss_mask, seqn = aggregate()
+    years = [2007,2009]
 
-    x[x!=0] = 1
-    x[miss_mask] = fill_val
+    x, labels, seqn = aggregate(years)
 
-    np.save(os.path.join(out_path, 'dietary_data.npy'), x)
-    np.save(os.path.join(out_path, 'dietary_labels.npy'), labels)
-    np.save(os.path.join(out_path, 'dietary_miss_mask.npy'), miss_mask)
-    np.save(os.path.join(out_path, 'dietary_seqn.npy'), seqn)
+    # save to disk
+    suffix = '{}-{}'.format(years[0], years[-1])
+
+    np.save(os.path.join(out_path, 'dietary_data.npy_{}'.format(suffix)), x)
+    np.save(os.path.join(out_path, 'dietary_labels.npy_{}'.format(suffix)), labels)
+    np.save(os.path.join(out_path, 'dietary_seqn.npy_{}'.format(suffix)), seqn)
