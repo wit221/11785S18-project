@@ -84,7 +84,7 @@ class SSVAE(nn.Module):
         """
         The model corresponds to the following generative process:
         p(z) = normal(0,I)              # latent
-        p(y|x) = categorical(I/10.)     # which digit (semi-supervised)
+        p(y|x) = categorical(I/10.)     # category (semi-supervised)
         p(x|y,z) = bernoulli(loc(y,z))   # predictors
         loc is given by a neural network  `decoder`
         :param xs: a batch of scaled predictor values

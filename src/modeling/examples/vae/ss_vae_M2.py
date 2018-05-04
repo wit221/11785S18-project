@@ -2,30 +2,35 @@ import argparse
 
 import torch
 import torch.nn as nn
+from visdom import Visdom
 
 import pyro
 import pyro.distributions as dist
 from pyro.contrib.examples.util import print_and_log, set_seed
 from pyro.infer import SVI, Trace_ELBO, TraceEnum_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
-from custom_mlp import MLP, Exp
-from data_loaders import NHANES, mkdir_p, setup_data_loaders
+from utils.custom_mlp import MLP, Exp
+from utils.mnist_cached import MNISTCached, mkdir_p, setup_data_loaders
+from utils.vae_plots import mnist_test_tsne_ssvae, plot_conditional_samples_ssvae
 
 
 class SSVAE(nn.Module):
     """
     This class encapsulates the parameters (neural networks) and models & guides needed to train a
-    semi-supervised variational auto-encoder on the NHANES image dataset
-    :param output_size: size of the tensor representing the class label (5 for quantized NHANES since
-                        we represent the class labels as a one-hot vector with 5 components)
-    :param input_size: size of the tensor representing the image (currently 187 for our NHANES dataset)
+    semi-supervised variational auto-encoder on the MNIST image dataset
+
+    :param output_size: size of the tensor representing the class label (10 for MNIST since
+                        we represent the class labels as a one-hot vector with 10 components)
+    :param input_size: size of the tensor representing the image (28*28 = 784 for our MNIST dataset
+                       since we flatten the images and scale the pixels to be in [0,1])
     :param z_dim: size of the tensor representing the latent random variable z
+                  (handwriting style for our MNIST dataset)
     :param hidden_layers: a tuple (or list) of MLP layers to be used in the neural networks
                           representing the parameters of the distributions in our model
     :param use_cuda: use GPUs for faster training
     :param aux_loss_multiplier: the multiplier to use with the auxiliary loss
     """
-    def __init__(self, output_size=5, input_size=187, z_dim=50, hidden_layers=(500,),
+    def __init__(self, output_size=10, input_size=784, z_dim=50, hidden_layers=(500,),
                  config_enum=None, use_cuda=False, aux_loss_multiplier=None):
 
         super(SSVAE, self).__init__()
@@ -83,12 +88,14 @@ class SSVAE(nn.Module):
     def model(self, xs, ys=None):
         """
         The model corresponds to the following generative process:
-        p(z) = normal(0,I)              # latent
+        p(z) = normal(0,I)              # handwriting style (latent)
         p(y|x) = categorical(I/10.)     # which digit (semi-supervised)
-        p(x|y,z) = bernoulli(loc(y,z))   # predictors
+        p(x|y,z) = bernoulli(loc(y,z))   # an image
         loc is given by a neural network  `decoder`
-        :param xs: a batch of scaled predictor values
-        :param ys: (optional) a batch of the class labels
+
+        :param xs: a batch of scaled vectors of pixels from an image
+        :param ys: (optional) a batch of the class labels i.e.
+                   the digit corresponding to the image(s)
         :return: None
         """
         # register this pytorch module and all of its sub-modules with pyro
@@ -123,6 +130,7 @@ class SSVAE(nn.Module):
         q(z|x,y) = normal(loc(x,y),scale(x,y))       # infer handwriting style from an image and the digit
         loc, scale are given by a neural network `encoder_z`
         alpha is given by a neural network `encoder_y`
+
         :param xs: a batch of scaled vectors of pixels from an image
         :param ys: (optional) a batch of the class labels i.e.
                    the digit corresponding to the image(s)
@@ -146,6 +154,7 @@ class SSVAE(nn.Module):
     def classifier(self, xs):
         """
         classify an image (or a batch of images)
+
         :param xs: a batch of scaled vectors of pixels from an image
         :return: a batch of the corresponding class labels (as one-hots)
         """
@@ -250,11 +259,17 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
     for pred, act in zip(predictions, actuals):
         for i in range(pred.size(0)):
             v = torch.sum(pred[i] == act[i])
-            accurate_preds += (v.item() == 5)
+            accurate_preds += (v.item() == 10)
 
     # calculate the accuracy between 0 and 1
     accuracy = (accurate_preds * 1.0) / (len(predictions) * batch_size)
     return accuracy
+
+
+def visualize(ss_vae, viz, test_loader):
+    if viz:
+        plot_conditional_samples_ssvae(ss_vae, viz)
+        mnist_test_tsne_ssvae(ssvae=ss_vae, test_loader=test_loader)
 
 
 def main(args):
@@ -265,6 +280,11 @@ def main(args):
     """
     if args.seed is not None:
         set_seed(args.seed, args.cuda)
+
+    viz = None
+    if args.visualize:
+        viz = Visdom()
+        mkdir_p("./vae_results")
 
     # batch_size: number of images (and labels) to be considered in a batch
     ss_vae = SSVAE(z_dim=args.z_dim,
@@ -294,15 +314,15 @@ def main(args):
         # setup the logger if a filename is provided
         logger = open(args.logfile, "w") if args.logfile else None
 
-        data_loaders = setup_data_loaders(NHANES, args.cuda, args.batch_size, sup_num=args.sup_num)
+        data_loaders = setup_data_loaders(MNISTCached, args.cuda, args.batch_size, sup_num=args.sup_num)
 
         # how often would a supervised batch be encountered during inference
-        # e.g. if sup_num is 2000, we would have every 2rd = int(6175/2000) batch supervised
+        # e.g. if sup_num is 3000, we would have every 16th = int(50000/3000) batch supervised
         # until we have traversed through the all supervised batches
-        periodic_interval_batches = int(NHANES.train_data_size / (1.0 * args.sup_num))
+        periodic_interval_batches = int(MNISTCached.train_data_size / (1.0 * args.sup_num))
 
         # number of unsupervised examples
-        unsup_num = NHANES.train_data_size - args.sup_num
+        unsup_num = MNISTCached.train_data_size - args.sup_num
 
         # initializing local variables to maintain the best validation accuracy
         # seen across epochs over the supervised training set
@@ -346,6 +366,8 @@ def main(args):
         print_and_log(logger, "best validation accuracy {} corresponding testing accuracy {} "
                       "last testing accuracy {}".format(best_valid_acc, corresponding_test_acc, final_test_accuracy))
 
+        # visualize the conditional samples
+        visualize(ss_vae, viz, data_loaders["test"])
     finally:
         # close the logger file object if we opened it earlier
         if args.logfile:
@@ -370,11 +392,12 @@ if __name__ == "__main__":
                         help="the multiplier to use with the auxiliary loss")
     parser.add_argument('-enum', '--enum-discrete', default="parallel",
                         help="parallel, sequential or none. uses parallel enumeration by default")
-    parser.add_argument('-sup', '--sup-num', default=2000,
+    parser.add_argument('-sup', '--sup-num', default=3000,
                         type=float, help="supervised amount of the data i.e. "
                                          "how many of the images have supervised labels")
     parser.add_argument('-zd', '--z-dim', default=50, type=int,
-                        help="size of the tensor representing the latent variable z " )
+                        help="size of the tensor representing the latent variable z "
+                             "variable (handwriting style for our MNIST dataset)")
     parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[500], type=int,
                         help="a tuple (or list) of MLP layers to be used in the neural networks "
                              "representing the parameters of the distributions in our model")
@@ -382,20 +405,22 @@ if __name__ == "__main__":
                         help="learning rate for Adam optimizer")
     parser.add_argument('-b1', '--beta-1', default=0.9, type=float,
                         help="beta-1 parameter for Adam optimizer")
-    parser.add_argument('-bs', '--batch-size', default=5, type=int,
-                        help="number of examples to be considered in a batch")
+    parser.add_argument('-bs', '--batch-size', default=200, type=int,
+                        help="number of images (and labels) to be considered in a batch")
     parser.add_argument('-log', '--logfile', default="./tmp.log", type=str,
                         help="filename for logging the outputs")
     parser.add_argument('--seed', default=None, type=int,
                         help="seed for controlling randomness in this example")
+    parser.add_argument('--visualize', action="store_true",
+                        help="use a visdom server to visualize the embeddings")
     args = parser.parse_args()
 
     # some assertions to make sure that batching math assumptions are met
     assert args.sup_num % args.batch_size == 0, "assuming simplicity of batching math"
-    assert NHANES.validation_size % args.batch_size == 0, \
+    assert MNISTCached.validation_size % args.batch_size == 0, \
         "batch size should divide the number of validation examples"
-    assert NHANES.train_data_size % args.batch_size == 0, \
+    assert MNISTCached.train_data_size % args.batch_size == 0, \
         "batch size doesn't divide total number of training data examples"
-    assert NHANES.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
+    assert MNISTCached.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
 
     main(args)
