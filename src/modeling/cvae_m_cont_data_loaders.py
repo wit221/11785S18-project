@@ -159,6 +159,7 @@ class NHANES(data.Dataset):
     training_file = 'training.pt'
     validation_file = 'validation.pt'
     test_file = 'test.pt'
+    predictions_file = 'predictions.pt'
 
     def __init__(self, root, mode, ychem_idx=chemlist, use_cuda=True, *args, **kwargs):
 
@@ -181,7 +182,7 @@ class NHANES(data.Dataset):
 
         self.mode = mode
 
-        assert mode in ["train", "test", "valid"], "invalid train/test option values"
+        assert mode in ["train", "test", "valid","prediction"], "invalid train/test option values"
 
         # Split data
 
@@ -202,11 +203,27 @@ class NHANES(data.Dataset):
             torch.save((self.train_data, self.train_mask, self.train_labels),
                        NHANES.processed_folder+"/"+NHANES.validation_file)
 
-        else:
+        elif mode == "test":
             self.train_data, self.train_mask = fn_y_nhanes(self.test_data,self.train_data)
             self.train_labels = fn_x_nhanes(self.test_labels, self.train_labels)
             torch.save((self.train_data, self.train_mask, self.train_labels),
                        NHANES.processed_folder+"/"+NHANES.test_file)
+
+        else:
+            self.train_data1, self.train_mask1 = fn_y_nhanes(self.train_data)
+            self.train_labels1 = fn_x_nhanes(self.train_labels)
+            self.train_data2, self.train_mask2 = fn_y_nhanes(self.valid_data,self.train_data)
+            self.train_labels2 = fn_x_nhanes(self.valid_labels, self.train_labels)
+            self.train_data3, self.train_mask3 = fn_y_nhanes(self.test_data,self.train_data)
+            self.train_labels3 = fn_x_nhanes(self.test_labels, self.train_labels)
+
+            self.train_data = torch.cat((self.train_data1,self.train_data2,self.train_data3), 0)
+            self.train_mask = torch.cat((self.train_mask1,self.train_mask2,self.train_mask3), 0)
+            self.train_labels = torch.cat((self.train_labels1,self.train_labels2,self.train_labels3), 0)
+
+            torch.save((self.train_data, self.train_mask, self.train_labels),
+                       NHANES.processed_folder+"/"+NHANES.predictions_file)
+
 
         self.train_data = self.train_data.type(torch.FloatTensor)
         self.train_mask = self.train_mask.type(torch.FloatTensor)
@@ -246,10 +263,14 @@ def setup_data_loaders(dataset, use_cuda, batch_size, root='.', **kwargs):
 
     cached_data = {}
     loaders = {}
-    for mode in ["train", "test", "valid"]:
+    for mode in ["train", "test", "valid","prediction"]:
 
         cached_data[mode] = dataset(root=root, mode=mode, use_cuda=use_cuda)
-        loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs)
+
+        if mode == "prediction":
+            loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=False, **kwargs)
+        else:
+            loaders[mode] = DataLoader(cached_data[mode], batch_size=batch_size, shuffle=True, **kwargs)
 
     return loaders
 

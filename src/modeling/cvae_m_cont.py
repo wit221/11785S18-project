@@ -1,4 +1,5 @@
 import argparse, sys, pdb, math
+import os
 
 import torch
 import torch.nn as nn
@@ -221,7 +222,7 @@ class CVAE(nn.Module):
         self.debug_qty += 1
 
 
-    def sim_measurements(self, x, stepQty):
+    def sim_measurements(self, x, stepQty, params=False):
         '''
         TODO: There is likely a more efficient way of implementing sampling
         Function for generating predictions
@@ -253,7 +254,10 @@ class CVAE(nn.Module):
                 print('mu=', mu, 'mu=', sigma, 'yout=', yout)
                 raise Exception('Invalid value is generated, aborting!')
 
-        return yout
+        if params is False:
+            return yout
+        else:
+            return mu, sigma
 
 
 def run_inference_for_epoch(batch_size, data_loaders, loss):
@@ -282,7 +286,7 @@ def run_inference_for_epoch(batch_size, data_loaders, loss):
     # return the values of all losses
     return epoch_losses
 
-def get_accuracy(data_loader, classifier_fn, batch_size):
+def get_accuracy(data_loader, classifier_fn):
     """
     compute the accuracy based on complete observations
     """
@@ -309,8 +313,27 @@ def get_accuracy(data_loader, classifier_fn, batch_size):
                     error += abs(pred[i,j] - act[i,j])
 
     # calculate the accuracy between 0 and 1
-    accuracy = (error * 1.0) / tot_preds
-    return accuracy
+    errors = (error * 1.0) / tot_preds
+    return errors
+
+def get_predictions(data_loader, classifier_fn):
+    """
+    compute the predictions for the entire dataset
+    """
+    mu, sigma, actuals, masks = [], [], [], []
+
+    # use the appropriate data loader
+    for (ys, ms, xs) in data_loader:
+
+        # use classification function to compute all predictions for each batch
+        m , s = classifier_fn(xs, 10, params=True)
+        mu.append(m)
+        sigma.append(s)
+        actuals.append(ys)
+        masks.append(ms)
+
+    return mu, sigma, actuals, masks
+
 
 def main(args):
     """
@@ -321,21 +344,27 @@ def main(args):
     if args.seed is not None:
         set_seed(args.seed, args.cuda)
 
-    # batch_size: number of images (and labels) to be considered in a batch
-    cvae = CVAE(z_dim=args.z_dim, y_dim=8, x_dim=180,
-                hidden_dim=args.hidden_dimension,
-                   use_cuda=args.cuda)
+    if os.path.exists('cvae.model.pt'):
+        print('Loading model %s' % 'cvae.model.pt')
+        cvae = torch.load('cvae.model.pt')
+
+    else:
+
+        cvae = CVAE(z_dim=args.z_dim, y_dim=8, x_dim=180,
+                       hidden_dim=args.hidden_dimension,
+                       use_cuda=args.cuda)
+
+    print(cvae)
 
     # setup the optimizer
     adam_params = {"lr": args.learning_rate,
                    "betas": (args.beta_1, 0.999),
                    "clip_norm":0.5}
     optimizer = ClippedAdam(adam_params)
+    guide = config_enumerate(cvae.guide, args.enum_discrete)
 
     # set up the loss for inference.
-    guide = config_enumerate(cvae.guide, args.enum_discrete)
     loss = SVI(cvae.model, guide, optimizer, loss=TraceEnum_ELBO(max_iarange_nesting=1))
-
 
     try:
         # setup the logger if a filename is provided
@@ -363,12 +392,12 @@ def main(args):
 
             str_print = "{} epoch: avg loss {}".format(i, "{}".format(str_loss))
 
-            validation_err = get_accuracy(data_loaders["valid"], cvae.sim_measurements, args.batch_size)
+            validation_err = get_accuracy(data_loaders["valid"], cvae.sim_measurements)
             str_print += " validation error {}".format(validation_err)
 
             # this test accuracy is only for logging, this is not used
             # to make any decisions during training
-            test_еrr = get_accuracy(data_loaders["test"], cvae.sim_measurements, args.batch_size)
+            test_еrr = get_accuracy(data_loaders["test"], cvae.sim_measurements)
             str_print += " test error {}".format(test_еrr)
 
             # update the best validation accuracy and the corresponding
@@ -380,12 +409,17 @@ def main(args):
 
             print_and_log(logger, str_print)
 
-        final_test_accuracy = get_accuracy(data_loaders["test"], cvae.sim_measurements, args.batch_size)
+        final_test_accuracy = get_accuracy(data_loaders["test"], cvae.sim_measurements)
 
         print_and_log(logger, "best validation error {} corresponding testing error {} "
                               "last testing error {}".format(best_valid_err, best_test_err,
                                                                 final_test_accuracy))
-        torch.save(cvae.state_dict(), 'cvae.model.pt')
+        torch.save(cvae, 'cvae.model.pt')
+
+        mu, sigma, actuals, masks = get_predictions(data_loaders["prediction"], cvae.sim_measurements)
+
+        torch.save((mu, sigma, actuals, masks), 'cvae.predictions.pt')
+
 
     finally:
         # close the logger file object if we opened it earlier
