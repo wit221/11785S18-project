@@ -44,6 +44,8 @@ class Encoder(nn.Module):
         # setup the three linear transformations
         self.fcy = nn.Linear(self.y_dim, hidden_dim)
         self.fcx = nn.Linear(self.x_dim, hidden_dim)
+        self.fc0 = nn.Linear(2*hidden_dim, 2*hidden_dim)
+        self.fc1 = nn.Linear(2*hidden_dim, 2*hidden_dim)
         self.fc21 = nn.Linear(2*hidden_dim, self.z_dim)
         self.fc22 = nn.Linear(2*hidden_dim, self.z_dim)
 
@@ -70,12 +72,14 @@ class Encoder(nn.Module):
         # compute the hidden units
         hiddenx = self.fcx(x)
         hiddeny = self.fcy(y)
-        hidden = squishing_nonlin(self.softplus(torch.cat((hiddeny, hiddenx), 1)))
+        hidden0 = squishing_nonlin(self.softplus(torch.cat((hiddeny, hiddenx), 1)))
+        hidden1 = squishing_nonlin(self.softplus(hidden0))
+        hidden2 = squishing_nonlin(self.softplus(hidden1))
 
         # then return a mean vector and a (positive) square root covariance
         # each of size batch_size x z_dim
-        z_loc = self.fc21(hidden)
-        z_scale = squishing_nonlin(self.softplus(self.fc22(hidden)))
+        z_loc = self.fc21(hidden2)
+        z_scale = squishing_nonlin(self.softplus(self.fc22(hidden2)))
 
         #print("zloc",z_loc)
         #print("zscale", z_scale)
@@ -98,6 +102,8 @@ class Decoder(nn.Module):
         # setup the two linear transformations used
         self.fcx = nn.Linear(self.x_dim, hidden_dim)
         self.fcz = nn.Linear(self.z_dim, hidden_dim)
+        self.fc0 = nn.Linear(2*hidden_dim, 2*hidden_dim)
+        self.fc1 = nn.Linear(2*hidden_dim, 2*hidden_dim)
         self.fc21 = nn.Linear(2*hidden_dim, self.y_dim)
         self.fc22 = nn.Linear(2*hidden_dim, self.y_dim)
 
@@ -116,12 +122,14 @@ class Decoder(nn.Module):
 
         hiddenz = self.fcz(z)
         hiddenx = self.fcx(x)
-        hidden = squishing_nonlin(self.softplus(torch.cat((hiddenz, hiddenx), 1)))
+        hidden0 = squishing_nonlin(self.softplus(torch.cat((hiddenz, hiddenx), 1)))
+        hidden1 = squishing_nonlin(self.softplus(hidden0))
+        hidden2 = squishing_nonlin(self.softplus(hidden1))
 
         # return the parameters
 
-        mu = self.fc21(hidden)
-        sigma = squishing_nonlin(self.softplus(self.fc22(hidden)))
+        mu = self.fc21(hidden2)
+        sigma = squishing_nonlin(self.softplus(self.fc22(hidden2)))
 
         return mu, sigma
 
@@ -314,7 +322,7 @@ def main(args):
         set_seed(args.seed, args.cuda)
 
     # batch_size: number of images (and labels) to be considered in a batch
-    cvae = CVAE(z_dim=args.z_dim, y_dim=3, x_dim=185,
+    cvae = CVAE(z_dim=args.z_dim, y_dim=8, x_dim=180,
                 hidden_dim=args.hidden_dimension,
                    use_cuda=args.cuda)
 
@@ -377,6 +385,7 @@ def main(args):
         print_and_log(logger, "best validation error {} corresponding testing error {} "
                               "last testing error {}".format(best_valid_err, best_test_err,
                                                                 final_test_accuracy))
+        torch.save(cvae.state_dict(), 'cvae.model.pt')
 
     finally:
         # close the logger file object if we opened it earlier
@@ -384,7 +393,7 @@ def main(args):
             logger.close()
 
 
-EXAMPLE_RUN = "python cvae.py --seed 0 --cuda -n 2 -enum parallel -zd 50 -hd 500 -lr 0.00042 -b1 0.95 -bs 200 -log ./tmp.log"
+EXAMPLE_RUN = "python cvae.py --seed 0 --cuda -n 2 -enum parallel -zd 100 -hd 256 -lr 0.000001 -b1 0.95 -bs 5 -log ./tmp.log"
 
 try:
     if __name__ == "__main__":

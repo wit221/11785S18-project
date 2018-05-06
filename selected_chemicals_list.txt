@@ -1,0 +1,14 @@
+This is the list of chemicals for analysis
+It is based on the GAO report https://www.gao.gov/new.items/d10662t.pdf
+And on relative availability in the NHANES 2013-2014 data file
+
+{'name': 'URXUHG', 'index': 43, 'num_nonmiss': 1771, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.2]', 'cat2': 'value >[ 0.2] and  <=[ 0.34]', 'cat3': 'value >[ 0.34] and  <=[ 0.69]', 'cat4': 'value >[ 0.69]', 'cat9': 'value missing'}
+{'name': 'URXUCD', 'index': 45, 'num_nonmiss': 2756, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.089]', 'cat2': 'value >[ 0.089] and  <=[ 0.19]', 'cat3': 'value >[ 0.19] and  <=[ 0.417]', 'cat4': 'value >[ 0.417]', 'cat9': 'value missing'}
+{'name': 'URXUPB', 'index': 50, 'num_nonmiss': 3231, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.18]', 'cat2': 'value >[ 0.18] and  <=[ 0.32]', 'cat3': 'value >[ 0.32] and  <=[ 0.56]', 'cat4': 'value >[ 0.56]', 'cat9': 'value missing'}
+{'name': 'LBXBGM', 'index': 60, 'num_nonmiss': 3855, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.25]', 'cat2': 'value >[ 0.25] and  <=[ 0.51]', 'cat3': 'value >[ 0.51] and  <=[ 1.2]', 'cat4': 'value >[ 1.2]', 'cat9': 'value missing'}
+{'name': 'LBXBCD', 'index': 62, 'num_nonmiss': 3703, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.14]', 'cat2': 'value >[ 0.14] and  <=[ 0.23]', 'cat3': 'value >[ 0.23] and  <=[ 0.45]', 'cat4': 'value >[ 0.45]', 'cat9': 'value missing'}
+{'name': 'LBXBPB', 'index': 64, 'num_nonmiss': 5215, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.5]', 'cat2': 'value >[ 0.5] and  <=[ 0.78]', 'cat3': 'value >[ 0.78] and  <=[ 1.28]', 'cat4': 'value >[ 1.28]', 'cat9': 'value missing'}
+{'name': 'LBXTHG', 'index': 66, 'num_nonmiss': 3876, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 0.42]', 'cat2': 'value >[ 0.42] and  <=[ 0.71]', 'cat3': 'value >[ 0.71] and  <=[ 1.41]', 'cat4': 'value >[ 1.41]', 'cat9': 'value missing'}
+{'name': 'URXUAS', 'index': 73, 'num_nonmiss': 3259, 'cat0': 'value below LLOD', 'cat1': 'value above LLOD and <=[ 3.17]', 'cat2': 'value >[ 3.17] and  <=[ 6.07]', 'cat3': 'value >[ 6.07] and  <=[ 12.245]', 'cat4': 'value >[ 12.245]', 'cat9': 'value missing'}
+
+[43,45,50,60,62,64,66,73]

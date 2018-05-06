@@ -142,6 +142,9 @@ class NHANES(data.Dataset):
     once at the beginning of the inference
     """
 
+    # List of chemicals
+    chemlist = [43, 45, 50, 60, 62, 64, 66, 73]
+
     # static class variables for caching training data
     train_data_size = 5215
     validation_size = 1000
@@ -157,7 +160,7 @@ class NHANES(data.Dataset):
     validation_file = 'validation.pt'
     test_file = 'test.pt'
 
-    def __init__(self, root, mode, ychem_idx=list(range(66,69)), use_cuda=True, *args, **kwargs):
+    def __init__(self, root, mode, ychem_idx=chemlist, use_cuda=True, *args, **kwargs):
 
         self.root = os.path.expanduser(root)
         self.ychem_idx = ychem_idx # default will take blood lead as target
