@@ -18,8 +18,8 @@ def squishing_nonlin(x):
     #return torch.log(x+1.01)
 
 def check_valid_range(var):
-    return np.sum(np.isinf(var.data.numpy())) == 0 and \
-            np.sum(np.isnan(var.data.numpy())) == 0
+    return np.sum(np.isinf(var.data.cpu().numpy())) == 0 and \
+            np.sum(np.isnan(var.data.cpu().numpy())) == 0
 
 def my_initializer(m):
     """
@@ -61,7 +61,8 @@ class Encoder(nn.Module):
         :param x: conditioning variables
         :return: location vector, scale vector for latent variables
         '''
-
+        x = x.cuda()
+        y = y.cuda()
         #print(x.size())
         #print(y.size())
 
@@ -120,7 +121,8 @@ class Decoder(nn.Module):
         :param x: conditioning variables
         :return: parameters of the measurement distribution
         '''
-
+        z = z.cuda()
+        x = x.cuda()
         hiddenz = self.fcz(z)
         hiddenx = self.fcx(x)
         hidden0 = squishing_nonlin(self.softplus(torch.cat((hiddenz, hiddenx), 1)))
@@ -204,10 +206,12 @@ class CVAE(nn.Module):
         :param x: conditioning variables
         :return: None
         '''
-
+        y = y.cuda()
+        x = x.cuda()
+        m = m.cuda()
         # register PyTorch module `encoder` with Pyro
         pyro.module("encoder", self.encoder)
-
+        # print(x.is_cuda, y.is_cuda, m)
         yFused = self.sim_measurements(x, 1) * (1-m) + m * y
         #yFused = y
 
@@ -229,7 +233,7 @@ class CVAE(nn.Module):
         :param x: conditioning variables
         :return: simulated measurements
         '''
-
+        x = x.cuda()
         yout = torch.ones(x.size()[0],self.y_dim)
         #print(x)
 
@@ -277,7 +281,9 @@ def run_inference_for_epoch(batch_size, data_loaders, loss):
     for i in range(batches_per_epoch):
 
         (ys, ms, xs) = next(iterator)
-
+        ys = ys.cuda()
+        ms = ms.cuda()
+        xs = xs.cuda()
         # run the inference
         new_loss = loss.step(ys, ms, xs)
         #print('Loss:', new_loss/batch_size)
@@ -305,6 +311,7 @@ def get_accuracy(data_loader, classifier_fn):
     tot_preds = 0.0
 
     for pred, act, mask in zip(predictions, actuals, masks):
+        pred = pred.cpu()
         for i in range(pred.size(0)):
             for j in range(pred.size(1)):
 
@@ -350,7 +357,7 @@ def main(args):
 
     else:
 
-        cvae = CVAE(z_dim=args.z_dim, y_dim=8, x_dim=180,
+        cvae = CVAE(z_dim=args.z_dim, y_dim=8, x_dim=163060, #x_dim=180,
                        hidden_dim=args.hidden_dimension,
                        use_cuda=args.cuda)
 
@@ -429,48 +436,48 @@ def main(args):
 
 EXAMPLE_RUN = "python cvae.py --seed 0 --cuda -n 2 -enum parallel -zd 100 -hd 256 -lr 0.000001 -b1 0.95 -bs 5 -log ./tmp.log"
 
-try:
-    if __name__ == "__main__":
+# try:
+if __name__ == "__main__":
 
-        parser = argparse.ArgumentParser(description="CVAE\n{}".format(EXAMPLE_RUN))
+    parser = argparse.ArgumentParser(description="CVAE\n{}".format(EXAMPLE_RUN))
 
-        parser.add_argument('--cuda', action='store_true',
-                            help="use GPU(s) to speed up training")
-        parser.add_argument('-n', '--num-epochs', default=50, type=int,
-                            help="number of epochs to run")
-        parser.add_argument('-enum', '--enum-discrete', default="parallel",
-                            help="parallel, sequential or none. uses parallel enumeration by default")
-        parser.add_argument('-zd', '--z-dim', default=50, type=int,
-                            help="size of the tensor representing the latent variable z " )
-        #parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[500], type=int,
-        #                    help="a tuple (or list) of MLP layers to be used in the neural networks "
-        #                         "representing the parameters of the distributions in our model")
-        parser.add_argument('-hd', '--hidden-dimension', default=256, type=int,
-                            help="number of units in the MLP layers to be used in the neural networks ")
-        parser.add_argument('-lr', '--learning-rate', default=0.00042, type=float,
-                            help="learning rate for Adam optimizer")
-        parser.add_argument('-b1', '--beta-1', default=0.9, type=float,
-                            help="beta-1 parameter for Adam optimizer")
-        parser.add_argument('-bs', '--batch-size', default=10, type=int,
-                            help="number of examples to be considered in a batch")
-        parser.add_argument('-log', '--logfile', default="./tmp.log", type=str,
-                            help="filename for logging the outputs")
-        parser.add_argument('--seed', default=None, type=int,
-                            help="seed for controlling randomness in this example")
-        args = parser.parse_args()
+    parser.add_argument('--cuda', action='store_true',
+                        help="use GPU(s) to speed up training")
+    parser.add_argument('-n', '--num-epochs', default=50, type=int,
+                        help="number of epochs to run")
+    parser.add_argument('-enum', '--enum-discrete', default="parallel",
+                        help="parallel, sequential or none. uses parallel enumeration by default")
+    parser.add_argument('-zd', '--z-dim', default=50, type=int,
+                        help="size of the tensor representing the latent variable z " )
+    #parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[500], type=int,
+    #                    help="a tuple (or list) of MLP layers to be used in the neural networks "
+    #                         "representing the parameters of the distributions in our model")
+    parser.add_argument('-hd', '--hidden-dimension', default=256, type=int,
+                        help="number of units in the MLP layers to be used in the neural networks ")
+    parser.add_argument('-lr', '--learning-rate', default=0.00042, type=float,
+                        help="learning rate for Adam optimizer")
+    parser.add_argument('-b1', '--beta-1', default=0.9, type=float,
+                        help="beta-1 parameter for Adam optimizer")
+    parser.add_argument('-bs', '--batch-size', default=10, type=int,
+                        help="number of examples to be considered in a batch")
+    parser.add_argument('-log', '--logfile', default="./tmp.log", type=str,
+                        help="filename for logging the outputs")
+    parser.add_argument('--seed', default=None, type=int,
+                        help="seed for controlling randomness in this example")
+    args = parser.parse_args()
 
-        # some assertions to make sure that batching math assumptions are met
-        assert NHANES.validation_size % args.batch_size == 0, \
-            "batch size should divide the number of validation examples"
-        assert NHANES.train_data_size % args.batch_size == 0, \
-            "batch size doesn't divide total number of training data examples"
-        assert NHANES.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
+    # some assertions to make sure that batching math assumptions are met
+    assert NHANES.validation_size % args.batch_size == 0, \
+        "batch size should divide the number of validation examples"
+    assert NHANES.train_data_size % args.batch_size == 0, \
+        "batch size doesn't divide total number of training data examples"
+    assert NHANES.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
 
-        main(args)
+    main(args)
 
-except:
-    # tb is traceback
-    exType, value, tb = sys.exc_info()
-    print(value)
-    print(tb)
-    pdb.post_mortem(tb)
+# except:
+#     # tb is traceback
+#     exType, value, tb = sys.exc_info()
+#     print(value)
+#     print(tb)
+#     pdb.post_mortem(tb)
