@@ -96,7 +96,7 @@ def cut_max(matr, upperBound):
             matr[r,c] = min(matr[r,c],  upperBound[c])
 
 
-def split_train_valid_test(datorig, yidx,  valid_num, test_num=1000):
+def split_train_valid_test(dat, yidx,  valid_num, test_num=1000):
     """
     helper function for splitting the data into train, validation parts and
     test parts.
@@ -108,12 +108,6 @@ def split_train_valid_test(datorig, yidx,  valid_num, test_num=1000):
     """
 
     # TODO this data processing step is only relevant for lab data (measurements)
-
-    dat = np.zeros((datorig.shape[0],datorig.shape[1]))
-
-    for r in range(datorig.shape[0]):
-        for c in range(datorig.shape[1]):
-            dat[r,c] = datorig[r,c,1]
 
     X = np.delete(dat,yidx,axis=1) # TODO we need to attach the relevant data, not the remainder of the chemicals
     Y = np.take(dat,yidx,axis=1)
@@ -154,7 +148,9 @@ class NHANES(data.Dataset):
     valid_data, valid_mask, valid_labels = None, None, None
     test_data, test_mask, test_labels = None, None, None
 
-    raw_data = 'data/npy/dense_labdata_2013-2014.npy'
+    # raw_data = 'data/npy/dense_labdata_2013-2014.npy'
+    raw_data = os.path.join(os.environ['NHANES_PROJECT_ROOT'], 'data/npy/all/data_adult_2007-2014.npy')
+
     processed_folder = 'data/processed'
     training_file = 'training.pt'
     validation_file = 'validation.pt'
