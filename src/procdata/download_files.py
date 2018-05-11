@@ -54,6 +54,7 @@ def get_file_dict(metadata,component,begin_year):
     '''
     lab_metadata = metadata.loc[(metadata['Component'] == component) & (metadata['Begin Year'] == begin_year)]
     file_names = lab_metadata['Data File Name'].unique()
+
     file_dict=dict()
 
     for f in file_names:
@@ -63,6 +64,25 @@ def get_file_dict(metadata,component,begin_year):
             continue
         else:
             file_dict[f] = df['Data File Description'].unique()[0]
+
+    return file_dict
+
+
+def get_file_dict_fixed(fileList, component, begin_year):
+    '''
+    Selects file name stubs from the relevant component and year
+    Return a dictionary of file name stubs with description
+    :param fileList:
+    :param component:
+    :param begin_year:
+    :return:
+    '''
+    file_names = fileList
+
+    file_dict = dict()
+
+    for f in file_names:
+        file_dict[f] = component + " " + str(begin_year)
 
     return file_dict
 
@@ -117,6 +137,9 @@ def convert_files(xpt_list):
     for f in xpt_list:
         df = pd.read_sas(f)
 
+        if 'SEQN' not in df.columns:
+            continue
+
         for r in range(df.shape[0]):
             id = int(df.loc[r,'SEQN'])
             colnames = list(set(df.columns) - set({'SEQN'}))
@@ -142,7 +165,10 @@ def get_llod(doc_list):
 
     for doc in doc_list:
 
-        struct = pd.read_html(doc)
+        try:
+            struct = pd.read_html(doc)
+        except:
+            continue
 
         lodcol = None
         lodrow = -1
@@ -163,6 +189,7 @@ def get_llod(doc_list):
                     if type(df.iloc[row,col]) is str and llod == df.iloc[row,col].strip():
                         lodcol = col
                         lodrow = row
+
 
             if lodcol is not None:
 
@@ -204,8 +231,19 @@ def main(argv):
 
     try:
 
-        metadata = get_meta(data_dir)
-        file_dict = get_file_dict(metadata,component,begin_year)
+        #metadata = get_meta(data_dir)
+        #file_dict = get_file_dict(metadata,component,begin_year)
+
+        if begin_year==2007:
+            fileList = ["UHG_E","UHM_E","PBCD_E","UAS_E"]
+        if begin_year==2009:
+            fileList = ["UHG_F","UHM_F","PBCD_F","UAS_F"]
+        if begin_year==2011:
+            fileList = ["UHG_G","UHM_G","IHGEM_G", "PBCD_G","UAS_G"]
+        if begin_year==2013:
+            fileList = ["UHG_H","UM_H","IHGEM_H", "PBCD_H","UTAS_H"]
+
+        file_dict = get_file_dict_fixed(fileList,component,begin_year)
 
         saveJson(file_dict,
                  data_dir+'json/files_'+component+'_'+cycle+'.json')

@@ -113,7 +113,7 @@ def split_train_valid_test(datorig, yidx,  valid_num, test_num=1000):
 
     for r in range(datorig.shape[0]):
         for c in range(datorig.shape[1]):
-            dat[r,c] = datorig[r,c,1]
+            dat[r,c] = datorig[r,c,0] # [r,c,1] uses imputed LLOD, [r,c,0] does not use imputed LLOD
 
     X = np.delete(dat,yidx,axis=1) # TODO we need to attach the relevant data, not the remainder of the chemicals
     Y = np.take(dat,yidx,axis=1)
