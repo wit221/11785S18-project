@@ -136,12 +136,14 @@ class NHANES(data.Dataset):
     valid_data, valid_mask, valid_labels = None, None, None
     test_data, test_mask, test_labels = None, None, None
 
-    raw_data = 'data/npy/quantized_dense_labdata_2013-2014.npy'
+    # raw_data = 'data/npy/quantized_dense_labdata_2013-2014.npy'
+    raw_data = 'data/npy/all/data_adult_2007-2014.npy'
+
     #processed_folder = 'data/processed'
     #training_file = 'training.pt'
     #test_file = 'test.pt'
 
-    def __init__(self, root, mode, ychem_idx=list(range(66,67)), use_cuda=True, *args, **kwargs):
+    def __init__(self, root, mode, ychem_idx=list(range(32612,32619)), use_cuda=True, *args, **kwargs):
 
         self.root = os.path.expanduser(root)
         self.ychem_idx = ychem_idx # default will take blood lead as target

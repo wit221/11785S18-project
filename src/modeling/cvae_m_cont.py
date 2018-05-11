@@ -1,4 +1,4 @@
-import argparse, sys, pdb, math
+import argparse, sys, math
 import os
 
 import torch
@@ -427,50 +427,51 @@ def main(args):
             logger.close()
 
 
-EXAMPLE_RUN = "python cvae.py --seed 0 --cuda -n 2 -enum parallel -zd 100 -hd 256 -lr 0.000001 -b1 0.95 -bs 5 -log ./tmp.log"
+EXAMPLE_RUN = "python cvae_m_cont.py --seed 0 --cuda -n 2 -enum parallel -zd 100 -hd 256 -lr 0.000001 -b1 0.95 -bs 5 -log ./tmp.log"
 
-try:
-    if __name__ == "__main__":
+# try:
+if __name__ == "__main__":
 
-        parser = argparse.ArgumentParser(description="CVAE\n{}".format(EXAMPLE_RUN))
+    parser = argparse.ArgumentParser(description="CVAE\n{}".format(EXAMPLE_RUN))
 
-        parser.add_argument('--cuda', action='store_true',
-                            help="use GPU(s) to speed up training")
-        parser.add_argument('-n', '--num-epochs', default=50, type=int,
-                            help="number of epochs to run")
-        parser.add_argument('-enum', '--enum-discrete', default="parallel",
-                            help="parallel, sequential or none. uses parallel enumeration by default")
-        parser.add_argument('-zd', '--z-dim', default=50, type=int,
-                            help="size of the tensor representing the latent variable z " )
-        #parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[500], type=int,
-        #                    help="a tuple (or list) of MLP layers to be used in the neural networks "
-        #                         "representing the parameters of the distributions in our model")
-        parser.add_argument('-hd', '--hidden-dimension', default=256, type=int,
-                            help="number of units in the MLP layers to be used in the neural networks ")
-        parser.add_argument('-lr', '--learning-rate', default=0.00042, type=float,
-                            help="learning rate for Adam optimizer")
-        parser.add_argument('-b1', '--beta-1', default=0.9, type=float,
-                            help="beta-1 parameter for Adam optimizer")
-        parser.add_argument('-bs', '--batch-size', default=10, type=int,
-                            help="number of examples to be considered in a batch")
-        parser.add_argument('-log', '--logfile', default="./tmp.log", type=str,
-                            help="filename for logging the outputs")
-        parser.add_argument('--seed', default=None, type=int,
-                            help="seed for controlling randomness in this example")
-        args = parser.parse_args()
+    parser.add_argument('--cuda', action='store_true',
+                        help="use GPU(s) to speed up training")
+    parser.add_argument('-n', '--num-epochs', default=50, type=int,
+                        help="number of epochs to run")
+    parser.add_argument('-enum', '--enum-discrete', default="parallel",
+                        help="parallel, sequential or none. uses parallel enumeration by default")
+    parser.add_argument('-zd', '--z-dim', default=50, type=int,
+                        help="size of the tensor representing the latent variable z " )
+    #parser.add_argument('-hl', '--hidden-layers', nargs='+', default=[500], type=int,
+    #                    help="a tuple (or list) of MLP layers to be used in the neural networks "
+    #                         "representing the parameters of the distributions in our model")
+    parser.add_argument('-hd', '--hidden-dimension', default=256, type=int,
+                        help="number of units in the MLP layers to be used in the neural networks ")
+    parser.add_argument('-lr', '--learning-rate', default=0.00042, type=float,
+                        help="learning rate for Adam optimizer")
+    parser.add_argument('-b1', '--beta-1', default=0.9, type=float,
+                        help="beta-1 parameter for Adam optimizer")
+    parser.add_argument('-bs', '--batch-size', default=10, type=int,
+                        help="number of examples to be considered in a batch")
+    parser.add_argument('-log', '--logfile', default="./tmp.log", type=str,
+                        help="filename for logging the outputs")
+    parser.add_argument('--seed', default=None, type=int,
+                        help="seed for controlling randomness in this example")
+    args = parser.parse_args()
 
-        # some assertions to make sure that batching math assumptions are met
-        assert NHANES.validation_size % args.batch_size == 0, \
-            "batch size should divide the number of validation examples"
-        assert NHANES.train_data_size % args.batch_size == 0, \
-            "batch size doesn't divide total number of training data examples"
-        assert NHANES.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
+    # some assertions to make sure that batching math assumptions are met
+    print(NHANES.train_data_size, NHANES.validation_size, NHANES.test_size)
+    assert NHANES.validation_size % args.batch_size == 0, \
+        "batch size should divide the number of validation examples"
+    assert NHANES.train_data_size % args.batch_size == 0, \
+        "batch size doesn't divide total number of training data examples"
+    assert NHANES.test_size % args.batch_size == 0, "batch size should divide the number of test examples"
 
-        main(args)
+    main(args)
 
-except:
-    # tb is traceback
-    exType, value, tb = sys.exc_info()
-    print(value)
-    print(tb)
-    pdb.post_mortem(tb)
+# except:
+#     # tb is traceback
+#     exType, value, tb = sys.exc_info()
+#     print(value)
+#     print(tb)
+#     # pdb.post_mortem(tb)

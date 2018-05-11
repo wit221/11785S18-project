@@ -154,7 +154,9 @@ class NHANES(data.Dataset):
     valid_data, valid_mask, valid_labels = None, None, None
     test_data, test_mask, test_labels = None, None, None
 
-    raw_data = 'data/npy/dense_labdata_2013-2014.npy'
+    # raw_data = 'data/npy/dense_labdata_2013-2014.npy'
+    raw_data = os.path.join(os.environ['NHANES_PROJECT_ROOT'], 'data/npy/all/data_adult_2007-2014.npy')
+
     processed_folder = 'data/processed'
     training_file = 'training.pt'
     validation_file = 'validation.pt'
