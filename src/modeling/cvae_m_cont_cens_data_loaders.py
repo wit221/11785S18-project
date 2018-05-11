@@ -2,6 +2,7 @@ from __future__ import print_function
 import torch.utils.data as data
 import errno
 import os
+import math
 from functools import reduce
 
 import numpy as np
@@ -38,26 +39,33 @@ def fn_y_nhanes(y, reference_y=None):
     scaler = RobustScaler(with_centering=False, quantile_range=(0, 95))
 
     if reference_y is None:
-        scaler.fit(y)
+        scaler.fit(y[:,:,0])
     else:
-        scaler.fit(reference_y)
+        scaler.fit(reference_y[:,:,0])
 
     # get mask before transforming
-    m = np.zeros((y.shape))
-    yc = np.ones((y.shape))
+    m = np.zeros((y.shape[0],y.shape[1]))
+    yc = np.ones((y.shape[0],y.shape[1]))
+    ld = np.zeros((y.shape[0],y.shape[1]))
     for r in range(y.shape[0]):
         for c in range(y.shape[1]):
             if y[r,c]>0:
                 m[r, c] = 1
-                yc[r,c] = y[r,c]
+                if y[r,c,1] < 1:
+                    ld[r,c] = 1
+                    yc[r, c] = y[r, c, 0]
+                else:
+                    ld[r, c] = 0
+                    yc[r, c] = y[r, c, 0] * math.sqrt(2)
 
     yt = scaler.transform(yc)
 
     # convert to torch
     yp = torch.from_numpy(yt)
     mp = torch.from_numpy(m)
+    ldp = torch.from_numpy(ld)
 
-    return yp, mp
+    return yp, mp, ldp
 
 
 def get_ss_indices_per_class(y, valid_num, test_num):
@@ -96,7 +104,7 @@ def cut_max(matr, upperBound):
             matr[r,c] = min(matr[r,c],  upperBound[c])
 
 
-def split_train_valid_test(dat, yidx,  valid_num, test_num=1000):
+def split_train_valid_test(daty,datx, yidx,  valid_num, test_num=1000):
     """
     helper function for splitting the data into train, validation parts and
     test parts.
@@ -115,8 +123,8 @@ def split_train_valid_test(dat, yidx,  valid_num, test_num=1000):
     #     for c in range(datorig.shape[1]):
     #         dat[r,c] = datorig[r,c,1]
 
-    X = np.delete(dat,yidx,axis=1) # TODO we need to attach the relevant data, not the remainder of the chemicals
-    Y = np.take(dat,yidx,axis=1)
+    X = np.delete(datx,yidx,axis=1) # TODO we need to attach the relevant data, not the remainder of the chemicals
+    Y = daty
 
     train_idx, valid_idx, test_idx = get_ss_indices_per_class(Y, valid_num, test_num)
 
@@ -147,7 +155,7 @@ class NHANES(data.Dataset):
     # chemlist = [43, 45, 50, 60, 62, 64, 66, 73]
 
     # static class variables for caching training data
-    train_data_size = 5215
+    train_data_size = 3000
     validation_size = 1000
     test_size = 1000
 
@@ -155,7 +163,8 @@ class NHANES(data.Dataset):
     valid_data, valid_mask, valid_labels = None, None, None
     test_data, test_mask, test_labels = None, None, None
 
-    raw_data = '../../data/npy/all/data_adult_2007-2014.npy'
+    raw_datax = '/Users/annabelova/Courses/2018SpringDeepLearning/Project/data/npy/predictorSample.npy'
+    raw_datay = '/Users/annabelova/Courses/2018SpringDeepLearning/Project/data/npy/sampleLab.npy'
 
 
     processed_folder = 'data/processed'
@@ -178,7 +187,8 @@ class NHANES(data.Dataset):
                 raise
 
         try:
-            self.rawnpy = np.load(os.path.join(self.root, NHANES.raw_data))
+            self.rawnpyx = np.load(os.path.join(self.root, NHANES.raw_datax))
+            self.rawnpyy = np.load(os.path.join(self.root, NHANES.raw_datay))
         except OSError as e:
             raise
 
@@ -192,49 +202,52 @@ class NHANES(data.Dataset):
         NHANES.train_data, NHANES.train_labels, \
             NHANES.valid_data, NHANES.valid_labels,  \
             NHANES.test_data, NHANES.test_labels = \
-            split_train_valid_test(self.rawnpy, self.ychem_idx, NHANES.validation_size, NHANES.test_size)
+            split_train_valid_test(self.rawnpyy,self.rawnpyx, self.ychem_idx, NHANES.validation_size, NHANES.test_size)
 
         if mode == "train":
-            self.train_data, self.train_mask = fn_y_nhanes(self.train_data)
+            self.train_data, self.train_mask, self.train_ld = fn_y_nhanes(self.train_data)
             self.train_labels = fn_x_nhanes(self.train_labels)
-            torch.save((self.train_data, self.train_mask, self.train_labels),
+            torch.save((self.train_data, self.train_mask, self.train_ld, self.train_labels),
                        NHANES.processed_folder+"/"+NHANES.training_file)
 
         elif mode == "valid":
-            self.train_data, self.train_mask = fn_y_nhanes(self.valid_data,self.train_data)
+            self.train_data, self.train_mask, self.train_ld = fn_y_nhanes(self.valid_data,self.train_data)
             self.train_labels = fn_x_nhanes(self.valid_labels, self.train_labels)
-            torch.save((self.train_data, self.train_mask, self.train_labels),
+            torch.save((self.train_data, self.train_mask, self.train_ld, self.train_labels),
                        NHANES.processed_folder+"/"+NHANES.validation_file)
 
         elif mode == "test":
-            self.train_data, self.train_mask = fn_y_nhanes(self.test_data,self.train_data)
+            self.train_data, self.train_mask, self.train_ld = fn_y_nhanes(self.test_data,self.train_data)
             self.train_labels = fn_x_nhanes(self.test_labels, self.train_labels)
-            torch.save((self.train_data, self.train_mask, self.train_labels),
+            torch.save((self.train_data, self.train_mask, self.train_ld, self.train_labels),
                        NHANES.processed_folder+"/"+NHANES.test_file)
 
         else:
-            self.train_data1, self.train_mask1 = fn_y_nhanes(self.train_data)
+            self.train_data1, self.train_mask1, self.train_ld1 = fn_y_nhanes(self.train_data)
             self.train_labels1 = fn_x_nhanes(self.train_labels)
-            self.train_data2, self.train_mask2 = fn_y_nhanes(self.valid_data,self.train_data)
+            self.train_data2, self.train_mask2, self.train_ld2 = fn_y_nhanes(self.valid_data,self.train_data)
             self.train_labels2 = fn_x_nhanes(self.valid_labels, self.train_labels)
-            self.train_data3, self.train_mask3 = fn_y_nhanes(self.test_data,self.train_data)
+            self.train_data3, self.train_mask3, self.train_ld3 = fn_y_nhanes(self.test_data,self.train_data)
             self.train_labels3 = fn_x_nhanes(self.test_labels, self.train_labels)
 
             self.train_data = torch.cat((self.train_data1,self.train_data2,self.train_data3), 0)
             self.train_mask = torch.cat((self.train_mask1,self.train_mask2,self.train_mask3), 0)
+            self.train_ld = torch.cat((self.train_ld1,self.train_ld2,self.train_ld3), 0)
             self.train_labels = torch.cat((self.train_labels1,self.train_labels2,self.train_labels3), 0)
 
-            torch.save((self.train_data, self.train_mask, self.train_labels),
+            torch.save((self.train_data, self.train_mask, self.train_ld, self.train_labels),
                        NHANES.processed_folder+"/"+NHANES.predictions_file)
 
 
         self.train_data = self.train_data.type(torch.FloatTensor)
         self.train_mask = self.train_mask.type(torch.FloatTensor)
+        self.train_ld = self.train_ld.type(torch.FloatTensor)
         self.train_labels = self.train_labels.type(torch.FloatTensor)
 
         if use_cuda:
             self.train_data.cuda()
             self.train_mask.cuda()
+            self.train_ld.cuda()
             self.train_labels.cuda()
 
     def __getitem__(self, index):
@@ -242,8 +255,8 @@ class NHANES(data.Dataset):
         :param index: Index or slice object
         :returns tuple: (y, m ,x) where target is index of the target class.
         """
-        y, m, x = self.train_data[index], self.train_mask[index], self.train_labels[index]
-        return y, m, x
+        y, m, l, x = self.train_data[index], self.train_mask[index], self.train_ld[index], self.train_labels[index]
+        return y, m, l, x
 
     def __len__(self):
         return len(self.train_data)
