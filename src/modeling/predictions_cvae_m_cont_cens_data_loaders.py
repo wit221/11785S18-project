@@ -158,7 +158,8 @@ class NHANES(data.Dataset):
     #validation_size = 1000
     #test_size = 1000
 
-    train_size = 19480
+    #train_size = 19480 # THIS IS FOR PREDICTION
+    train_size = 9580 # THIS IS FOR SIMULATION
     validation_size = 2000
     test_size = 2000
 
@@ -170,8 +171,11 @@ class NHANES(data.Dataset):
     #raw_datax = '/Users/annabelova/Courses/2018SpringDeepLearning/Project/data/npy/predictorSample.npy'
     #raw_datay = '/Users/annabelova/Courses/2018SpringDeepLearning/Project/data/npy/sampleLab.npy'
 
-    raw_datax = '../Data/data_adult_2007-2014.npy'
+    #raw_datax = '../Data/data_adult_2007-2014.npy'
+    raw_datax='../Data/data_adult_2007-2014_counterfactual.npy'
     raw_datay = '../Data/labdata_2007-2014.npy'
+    raw_suppl = '../Data/supplConsumers_adult_2007-2014.npy'
+    raw_suppl_sim = 1 # 0 for overall, 1 for supplement consumers
 
     #raw_datax = '../Data/predictorSample.npy'
     #raw_datay = '../Data/sampleLab.npy'
@@ -197,8 +201,16 @@ class NHANES(data.Dataset):
                 raise
 
         try:
-            self.rawnpyx = np.load(os.path.join(self.root, NHANES.raw_datax))
-            self.rawnpyy = np.load(os.path.join(self.root, NHANES.raw_datay))
+            if self.raw_suppl_sim==0:
+                self.rawnpyx = np.load(os.path.join(self.root, NHANES.raw_datax))
+                self.rawnpyy = np.load(os.path.join(self.root, NHANES.raw_datay))
+            else:
+                self.rawnpyx = np.load(os.path.join(self.root, NHANES.raw_datax))
+                self.rawnpyy = np.load(os.path.join(self.root, NHANES.raw_datay))
+                self.supplidx = np.load(os.path.join(self.root, NHANES.raw_suppl))
+                self.rawnpyx = np.take(self.rawnpyx,self.supplidx,axis=0)
+                self.rawnpyy = np.take(self.rawnpyy,self.supplidx,axis=0)
+
         except OSError as e:
             raise
 
@@ -290,8 +302,8 @@ def setup_data_loaders(dataset, use_cuda, batch_size, root='.', **kwargs):
     cached_data = {}
     loaders = {}
 
-    for mode in ["train", "test", "valid"]:
-    #for mode in ["train", "test", "valid","prediction"]:
+    #for mode in ["train", "test", "valid"]:
+    for mode in ["prediction"]:
 
         cached_data[mode] = dataset(root=root, mode=mode, use_cuda=use_cuda)
 

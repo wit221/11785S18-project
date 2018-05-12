@@ -16,9 +16,12 @@ class RobustDimScaler:
 
         for i in range(self.dim):
             indx = self._getNonMissIndx(dataTrain[:,i])
-            arr = dataTrain[indx,i]
-            qmin, qmax = np.percentile(arr, (qunatile_min, quantile_max))
-            self.scalers.append( (qmin, 1.0/(qmax - qmin)) )
+            if sum(indx) > 0:
+                arr = dataTrain[indx,i]
+                qmin, qmax = np.percentile(arr, (qunatile_min, quantile_max))
+                self.scalers.append( (qmin, 1.0/(qmax - qmin)) )
+            else:
+                self.scalers.append((0, 1.0 ))
 
     def transform(self, data):
         if len(data.shape) != 2:
@@ -35,6 +38,10 @@ class RobustDimScaler:
             arr = np.maximum((arr - qmin) * scale, self.toler_eps)
 
             data[indx, i] = arr
+
+        return data
+
+
 
 import numpy as np
 
@@ -54,12 +61,13 @@ for k in range(int(nr*nc / 4)):
     data[r,c] = -1
 
 
-print(data)
+#print(data)
 
-print('==============')
+#print('==============')
 
 scalar = RobustDimScaler(data, -1, 5, 95)
 
 scalar.transform(data)
 
-print(data)
+#print(data)
+
